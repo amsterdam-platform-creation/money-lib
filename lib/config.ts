@@ -93,7 +93,7 @@ export const getLocale = (locale = config.defaultLocale) => ({
 });
 
 export const getCurrency = (currency = config.defaultCurrency) => ({
-  ...config.currencies[currency],
+  ...(config.currencies[currency] ?? config.currencies[config.defaultCurrency]),
 });
 
 export const getDefaultRounder = () => {

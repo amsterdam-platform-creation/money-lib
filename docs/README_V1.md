@@ -25,7 +25,7 @@ type Money = {
 ### Usage example
 
 ```ts
-import money, { Money, Cents } from "money-lib/v1";
+import money, { Money, Cents } from "money-lib";
 
 const m = money()
   .debug() // money: { amount: 0, currency: 'EUR' }

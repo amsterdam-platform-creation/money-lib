@@ -1,4 +1,4 @@
-import { config, setConfig } from "../config";
+import { config, setConfig } from "./config";
 import {
   zero,
   fromInt,
@@ -21,19 +21,18 @@ import {
   isPositive,
   isNegative,
   isValid,
-  splitV1,
+  split,
   format,
-  formatPartsV1,
+  formatParts,
   parse,
   toString,
   toFloatString,
   min,
   max,
   abs,
-} from "../core";
+} from "./core";
 
-import type { Cents, Money } from "../types";
-import type { ChainedMoney } from "./types";
+import type { ChainedMoney, Cents, Money } from "./types";
 
 // unwrap Money from chain, or init with zero value
 const unwrap = (m: Money | ChainedMoney): Money => {
@@ -41,7 +40,7 @@ const unwrap = (m: Money | ChainedMoney): Money => {
 };
 
 /**
- * @deprecated Use V2
+ * @hint Use V2
  * @example import { money } from "money-lib/dist/v2"
  */
 const moneyChain = (money: Money | ChainedMoney = zero()): ChainedMoney => {
@@ -101,7 +100,7 @@ const moneyChain = (money: Money | ChainedMoney = zero()): ChainedMoney => {
 
     isValid: () => isValid(_m),
 
-    split: () => splitV1(_m),
+    split: () => split(_m),
 
     add: (m1: Money | ChainedMoney, ...m: (Money | ChainedMoney)[]) =>
       moneyChain(add(_m, unwrap(m1), ...m.map(unwrap))),
@@ -119,12 +118,12 @@ const moneyChain = (money: Money | ChainedMoney = zero()): ChainedMoney => {
 
     format: (ops?: {
       locale?: string;
-      cents?: boolean;
+      cents?: boolean | "no" | "ifAny";
       withPlusSign?: boolean;
       trailingZeros?: boolean;
     }) => format(_m, ops),
 
-    formatParts: (locale?: string) => formatPartsV1(_m, locale),
+    formatParts: (locale?: string) => formatParts(_m, locale),
 
     parse: (
       s: string,

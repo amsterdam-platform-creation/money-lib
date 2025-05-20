@@ -1,11 +1,6 @@
 import { config, getCurrency, getDefaultRounder, getLocale } from "./config";
 import type { Cents, Money } from "./types";
 
-/**
- * Cache Intl.NumberFormat instances per locale.
- */
-const formatterCache = new Map<string, Intl.NumberFormat>();
-
 // ------ Initialization ------ //
 
 export const zero = (currency = config.defaultCurrency) => {
@@ -14,7 +9,7 @@ export const zero = (currency = config.defaultCurrency) => {
 
 export const fromInt = (
   amount: Cents,
-  currency = config.defaultCurrency
+  currency = config.defaultCurrency,
 ): Money => {
   return { amount, currency };
 };
@@ -22,7 +17,7 @@ export const fromInt = (
 export const fromFloat = (
   amount: number,
   currency = config.defaultCurrency,
-  round = getDefaultRounder()
+  round = getDefaultRounder(),
 ): Money => {
   const scale = getCurrencyScale(zero(currency));
 
@@ -34,7 +29,7 @@ export const fromFloat = (
 
 export const fromIntString = (
   amount: string,
-  currency = config.defaultCurrency
+  currency = config.defaultCurrency,
 ): Money => {
   const parsed = parseInt(amount, 10);
   return fromInt(Number.isNaN(parsed) || parsed === 0 ? 0 : parsed, currency);
@@ -43,13 +38,13 @@ export const fromIntString = (
 export const fromFloatString = (
   amount: string,
   currency = config.defaultCurrency,
-  round = getDefaultRounder()
+  round = getDefaultRounder(),
 ): Money => {
   const parsed = parseFloat(amount);
   return fromFloat(
     Number.isNaN(parsed) || parsed === 0 ? 0 : parsed,
     currency,
-    round
+    round,
   );
 };
 
@@ -60,9 +55,10 @@ export const toInt = (m: Money): Cents => {
 };
 
 export const toFloat = (m: Money): number => {
-  const { base, centsFloat } = split(m);
+  const scale = getCurrencyScale(m);
+  const { whole, cents } = split(m);
 
-  return base + centsFloat;
+  return whole + cents / scale;
 };
 
 export const toString = (m: Money): string => {
@@ -71,9 +67,9 @@ export const toString = (m: Money): string => {
 
 export const toFloatString = (m: Money): string => {
   const scale = getCurrencyScale(m);
-  const { base, centsInt } = split(m);
+  const { whole, cents } = split(m);
 
-  return `${base}.${centsInt.toString().padStart(Math.log10(scale), "0")}`;
+  return `${whole}.${cents.toString().padStart(Math.log10(scale), "0")}`;
 };
 
 // ------ Arithmetics ------ //
@@ -95,7 +91,7 @@ export const subtract = (m1: Money, m2: Money, ...m: Money[]): Money => {
 export const multiply = (
   m: Money,
   multiplier: number, // | Money
-  round = getDefaultRounder()
+  round = getDefaultRounder(),
 ): Money => {
   return fromInt(round(m.amount * multiplier, 0), m.currency);
 };
@@ -103,7 +99,7 @@ export const multiply = (
 export const divide = (
   m: Money,
   divider: number, // | Money
-  round = getDefaultRounder()
+  round = getDefaultRounder(),
 ): Money => {
   return fromInt(round(m.amount / divider, 0), m.currency);
 };
@@ -162,7 +158,7 @@ export const min = (m1: Money, ...m: Money[]): Money => {
 
 export const max = (m1: Money, ...m: Money[]): Money => {
   return [m1, ...m].reduce((acc, curr) =>
-    greaterThan(acc, curr) ? acc : curr
+    greaterThan(acc, curr) ? acc : curr,
   );
 };
 
@@ -175,13 +171,13 @@ export const isValid = (m: any): m is Money => {
       (typeof m.currency === "undefined" ||
         (typeof m.currency === "string" &&
           m.currency.length > 0 &&
-          !!getCurrency(m.currency)))
+          !!getCurrency(m.currency))),
   );
 };
 
 // ------ Transformation ------ //
 
-export const splitV1 = (m: Money): { whole: number; cents: number } => {
+export const split = (m: Money): { whole: number; cents: number } => {
   const scale = getCurrencyScale(m);
   const whole = Math.trunc(m.amount / scale);
   const cents = m.amount - whole * scale;
@@ -189,27 +185,22 @@ export const splitV1 = (m: Money): { whole: number; cents: number } => {
   return { whole, cents };
 };
 
-export const split = (
-  m: Money
-): { base: number; centsInt: number; centsFloat: number } => {
-  const scale = getCurrencyScale(m);
-  const base = Math.trunc(m.amount / scale);
-  const centsInt = m.amount - base * scale;
-  const centsFloat = +`0.${centsInt}`;
-
-  return { base, centsFloat, centsInt };
-};
-
 // ------ Formatting ------ //
 
 export const format = (
   m: Money,
   ops?: {
-    cents?: boolean; // default: true; if false, 00 cents will be omitted
+    /**
+     * - true: always show cents
+     * - "no": never show cents
+     * - false | "ifAny": show cents only if they are not zero
+     */
+    cents?: boolean | "ifAny" | "no"; // default: true; if false, 00 cents will be omitted
     locale?: string;
     trailingZeros?: boolean; // default: true; if false, 1.50 will be formatted as 1.5
     withPlusSign?: boolean; // default: false; if true, positive numbers will be prefixed with a plus sign
-  }
+    useGrouping?: boolean; // to use grouping while formating integer part of number (false - 1000.00 vs true - 1,000.00)
+  },
 ): string => {
   const { cents, locale, trailingZeros, withPlusSign } = {
     cents: ops?.cents ?? true,
@@ -217,15 +208,20 @@ export const format = (
     trailingZeros: ops?.trailingZeros ?? true,
     withPlusSign: ops?.withPlusSign ?? false,
   };
-  const parts = formatParts(m, locale);
+  const parts = formatParts(m, locale, ops?.useGrouping);
   const signSymbol = parts.sign === "-" ? "-" : "";
 
   let formatted = "";
 
-  if (!cents && parts.cents === "0".repeat(getCurrency(m.currency).precision)) {
-    formatted = `${signSymbol}${parts.currencySymbol}${parts.baseFormatted}`;
+  if (
+    (!cents || cents === "ifAny") &&
+    parts.cents === "0".repeat(getCurrency(m.currency).precision)
+  ) {
+    formatted = `${signSymbol}${parts.currencySymbol}${parts.wholeFormatted}`;
+  } else if (cents === "no") {
+    formatted = `${signSymbol}${parts.currencySymbol}${parts.wholeFormatted}`;
   } else {
-    formatted = `${signSymbol}${parts.currencySymbol}${parts.baseFormatted}${parts.decimalSeparator}${parts.cents}`;
+    formatted = `${signSymbol}${parts.currencySymbol}${parts.wholeFormatted}${parts.decimalSeparator}${parts.cents}`;
   }
 
   if (!trailingZeros) {
@@ -241,19 +237,18 @@ export const format = (
 
 export const formatIntegerPart = (
   integerPart: number,
-  locale = config.defaultLocale
+  locale = config.defaultLocale,
+  useGrouping = true,
 ) => {
-  let formatter = formatterCache.get(locale);
-  if (!formatter) {
-    formatter = new Intl.NumberFormat(locale);
-    formatterCache.set(locale, formatter);
-  }
-  return formatter.format(integerPart);
+  return new Intl.NumberFormat(locale, {
+    useGrouping,
+  }).format(integerPart);
 };
 
-export const formatPartsV1 = (
+export const formatParts = (
   m: Money,
-  locale = config.defaultLocale
+  locale = config.defaultLocale,
+  useGrouping?: boolean,
 ): {
   whole: string;
   wholeFormatted: string;
@@ -264,9 +259,9 @@ export const formatPartsV1 = (
 } => {
   const { symbol, precision } = getCurrency(m.currency);
   const { decimalSeparator } = getLocale(locale);
-  const { whole, cents } = splitV1(m);
+  const { whole, cents } = split(m);
   const absWhole = Math.abs(whole);
-  const wholeFormatted = formatIntegerPart(absWhole, locale);
+  const wholeFormatted = formatIntegerPart(absWhole, locale, useGrouping);
   const sign = getAmountSign(m);
 
   return {
@@ -279,41 +274,13 @@ export const formatPartsV1 = (
   };
 };
 
-export const formatParts = (
-  m: Money,
-  locale = config.defaultLocale
-): {
-  base: string;
-  baseFormatted: string;
-  cents: string;
-  currencySymbol: string;
-  decimalSeparator: string;
-  sign: "+" | "-" | "";
-} => {
-  const { symbol, precision } = getCurrency(m.currency);
-  const { decimalSeparator } = getLocale(locale);
-  const { base, centsInt } = split(m);
-  const absBase = Math.abs(base);
-  const baseFormatted = formatIntegerPart(absBase, locale);
-  const sign = getAmountSign(m);
-
-  return {
-    base: `${absBase}`,
-    baseFormatted,
-    cents: `${Math.abs(centsInt)}`.padStart(precision, "0"),
-    currencySymbol: symbol,
-    decimalSeparator,
-    sign,
-  };
-};
-
 // ------ Parsing ------ //
 
 export const parse = (
   s: string,
   currency: string,
   locale = config.defaultLocale,
-  decimalSeparator?: "." | ","
+  decimalSeparator?: "." | ",",
 ): Money => {
   const _decimalSeparator =
     decimalSeparator ?? getLocale(locale).decimalSeparator;

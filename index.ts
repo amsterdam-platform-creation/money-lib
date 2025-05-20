@@ -1,6 +1,48 @@
-import * as v2 from "./lib/v2/chain";
-import { defaultConfig } from "./lib/config";
+export type { Money, Cents } from "./lib/types";
 
-export const { money } = v2.setupMoney(defaultConfig);
+import { default as money } from "./lib/chain";
 
-export const setupMoney = v2.setupMoney;
+export default money;
+
+export {
+  // Initialization
+  zero,
+  fromInt,
+  fromFloat,
+
+  // Serialization
+  toInt,
+  toFloat,
+
+  // Arithmetics
+  add,
+  subtract,
+  multiply,
+  divide,
+
+  // Comparison
+  compare,
+  equals,
+  greaterThan,
+  greaterThanOrEqual,
+  lessThan,
+  lessThanOrEqual,
+  isZero,
+  isPositive,
+  isNegative,
+
+  // Validation
+  isValid,
+
+  // Transformation
+  split,
+
+  // Formatting
+  format,
+  formatParts,
+
+  // Parsing
+  parse,
+} from "./lib/core";
+
+export { setConfig } from "./lib/config";

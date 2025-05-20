@@ -1,6 +1,6 @@
 {
   "name": "money-lib",
-  "version": "2.0.0-beta.8",
+  "version": "1.7.0",
   "description": "TypeScript library to work with money",
   "main": "dist/index.js",
   "scripts": {
@@ -31,11 +31,10 @@
   },
   "homepage": "https://github.com/givehug/money#readme",
   "devDependencies": {
-    "tsx": "3.12.1",
-    "bun-types": "^1.0.1"
+    "bun-types": "^1.0.1",
+    "tsx": "3.12.1"
   },
-  "exports": {
-    "./v1": "./dist/v1.js",
-    "./utils": "./dist/utils.js"
+  "dependencies": {
+    "typescript": "^5.8.3"
   }
 }
